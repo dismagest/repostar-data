@@ -2,7 +2,7 @@ name: Ingest fuel prices
 
 on:
   schedule:
-    - cron: '7 * * * *'
+    - cron: '23 * * * *'
   workflow_dispatch:
     inputs:
       backfill_days:
