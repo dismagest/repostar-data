@@ -47,6 +47,9 @@ export function titleCase(s: string): string {
 
 export type OutputMap = Map<string, unknown>;
 
+/** 5 decimales ≈ 1 m: suficiente para el mapa y ahorra bytes en la capa. */
+const r5 = (n: number) => Math.round(n * 1e5) / 1e5;
+
 export function buildOutputs(state: State, now = new Date()): OutputMap {
   const out: OutputMap = new Map();
   const generatedAt = now.toISOString();
@@ -122,7 +125,7 @@ export function buildOutputs(state: State, now = new Date()): OutputMap {
       const level = t ? levelFor(cur[0], t) : 1;
       rec.prices[fuel] = { price: cur[0], prev: cur[1], changedAt: new Date(cur[2] * 1000).toISOString(), level };
       const delta = cur[1] === null ? 0 : Math.round((cur[0] - cur[1]) * 1000) / 1000;
-      const row: LayerStation = [id, s.lat, s.lng, cur[0], level, bIdx, sIdx, s.provinceId, delta];
+      const row: LayerStation = [id, r5(s.lat), r5(s.lng), cur[0], level, bIdx, sIdx, s.provinceId, delta];
       layers[fuel].stations.push(row);
       const h = state.history[key(id, fuel)];
       if (h && h.length) {
