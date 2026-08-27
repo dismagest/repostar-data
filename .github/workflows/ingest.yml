@@ -1,0 +1,51 @@
+name: Ingest fuel prices
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: 'Días de histórico a rellenar (0 = ninguno)'
+        default: '0'
+      allow_empty_state:
+        description: 'Permitir arrancar sin estado previo (solo primera ejecución)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run pipeline
+        env:
+          DATA_URL: https://dismagest.github.io/repostar-data
+          ALLOW_EMPTY_STATE: ${{ inputs.allow_empty_state == true && '1' || '0' }}
+        run: |
+          node src/cli.ts run \
+            --state "$DATA_URL/state.json" \
+            --out out \
+            --backfill "${{ inputs.backfill_days || '0' }}"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+      - id: deployment
+        uses: actions/deploy-pages@v4

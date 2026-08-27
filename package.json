@@ -1,0 +1,12 @@
+{
+  "name": "repostar-data",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pipeline de datos abiertos de precios de carburantes en España (fuente: MITECO) para la app Repostar.",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "run": "node src/cli.ts run",
+    "backfill": "node src/cli.ts run --backfill 30 --allow-empty"
+  }
+}
