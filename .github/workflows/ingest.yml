@@ -2,7 +2,11 @@ name: Ingest fuel prices
 
 on:
   schedule:
-    - cron: '23 * * * *'
+    # El planificador de GitHub es "best effort" y descarta slots cuando hay carga:
+    # con hora en punto solo se ejecutaba ~1 de cada 8. Lo intentamos 3 veces por hora
+    # (minutos poco congestionados) para que la publicación no se quede vieja.
+    # Cada ejecución es idempotente: si nada ha cambiado, republica lo mismo.
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
     inputs:
       backfill_days:
