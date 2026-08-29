@@ -4,12 +4,14 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
-  DATA_FILES, FUEL_IDS, SHARDS, shardOf, levelFor, CONTRACT_VERSION,
+  DATA_FILES, FUEL_IDS, SHARDS, shardOf, levelFor, CONTRACT_VERSION, EV_SHARDS, EV_CONNECTOR_BIT, evShardOf,
+  type EvLayerJson, type EvLayerSite, type EvShard,
   type ChangeItem, type ChangesJson, type FuelId, type HistoryShard, type LayerJson, type LayerStation,
   type MetaJson, type PlaceItem, type PlacesJson, type ProvinceMeta, type StationRecord, type StationsShard,
   type Thresholds, type TrendPoint, type TrendsJson,
 } from './contract.ts';
 import { activeStationIds, key, referenceThresholds } from './apply.ts';
+import { speedTier } from './ev.ts';
 import { madridDate } from './ministry.ts';
 import type { State } from './state.ts';
 
@@ -207,6 +209,33 @@ export function buildOutputs(state: State, now = new Date()): OutputMap {
   const placesJson: PlacesJson = { generatedAt, items: places };
   out.set(DATA_FILES.places, placesJson);
 
+  // --- recarga eléctrica (DATEX2 de la DGT) ---
+  let evMeta: MetaJson['ev'];
+  if (state.ev && state.ev.sites.length > 0) {
+    const operatorCounts = new Map<string, number>();
+    for (const s of state.ev.sites) operatorCounts.set(s.operator, (operatorCounts.get(s.operator) ?? 0) + 1);
+    const operators = [...operatorCounts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const opIdx = new Map(operators.map((n, i) => [n, i]));
+    const evShards: EvShard[] = Array.from({ length: EV_SHARDS }, () => ({}));
+    const layer: EvLayerJson = { generatedAt, publishedAt: state.ev.publishedAt, operators, sites: [] };
+    let connectorsTotal = 0;
+    let pointsTotal = 0;
+    for (const s of state.ev.sites) {
+      let mask = 0;
+      for (const c of s.connectors) {
+        mask |= EV_CONNECTOR_BIT[c.type];
+        connectorsTotal += c.n;
+      }
+      pointsTotal += s.points;
+      const row: EvLayerSite = [s.id, s.lat, s.lng, s.maxKw, speedTier(s.maxKw), s.points, mask, opIdx.get(s.operator) ?? -1, s.open24h ? 1 : 0];
+      layer.sites.push(row);
+      evShards[evShardOf(s.id)][s.id] = s;
+    }
+    out.set(DATA_FILES.evLayer, layer);
+    for (let i = 0; i < EV_SHARDS; i++) out.set(DATA_FILES.evShard(i), evShards[i]);
+    evMeta = { sites: state.ev.sites.length, points: pointsTotal, connectors: connectorsTotal, publishedAt: state.ev.publishedAt };
+  }
+
   // --- meta, brent, noticias ---
   const meta: MetaJson = {
     version: CONTRACT_VERSION,
@@ -217,6 +246,7 @@ export function buildOutputs(state: State, now = new Date()): OutputMap {
     provinces,
     thresholds,
     brands,
+    ...(evMeta ? { ev: evMeta } : {}),
   };
   out.set(DATA_FILES.meta, meta);
   out.set(DATA_FILES.brent, state.brent ?? { updatedAt: '', series: [] });

@@ -2,7 +2,7 @@
  * Estado interno del pipeline: se publica como state.json y se recarga en la siguiente ejecución.
  */
 import { readFile, writeFile } from 'node:fs/promises';
-import { CONTRACT_VERSION, type BrentJson, type NewsJson } from './contract.ts';
+import { CONTRACT_VERSION, type BrentJson, type EvSite, type NewsJson } from './contract.ts';
 import type { DailyStat } from './stats.ts';
 
 export interface StateStation {
@@ -40,6 +40,8 @@ export interface State {
   daily: Record<string, Record<string, Record<string, DailyStat>>>;
   news: NewsJson | null;
   brent: BrentJson | null;
+  /** puntos de recarga (DATEX2 de la DGT); se refresca una vez al día */
+  ev: { fetchedAt: string; publishedAt: string; sites: EvSite[] } | null;
   runs: { at: string; sourceDate: string; stations: number; changed: number; mode: string }[];
 }
 
@@ -55,6 +57,7 @@ export function emptyState(): State {
     daily: {},
     news: null,
     brent: null,
+    ev: null,
     runs: [],
   };
 }

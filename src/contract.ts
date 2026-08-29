@@ -74,6 +74,8 @@ export interface MetaJson {
   /** thresholds[fuel]['ES' | provinceId] */
   thresholds: Record<string, Record<string, Thresholds>>;
   brands: string[];
+  /** presente cuando hay datos de recarga eléctrica publicados */
+  ev?: EvMeta;
 }
 
 /** [id, lat, lng, price, level, brandIdx(-1 = otras), scheduleIdx, provinceId, delta] */
@@ -168,7 +170,83 @@ export interface PlacesJson {
   items: PlaceItem[];
 }
 
+/* ---------- Recarga eléctrica ---------- */
+
+export const EV_CONNECTORS = [
+  { id: 'ccs2', name: 'CCS (Combo 2)', short: 'CCS', dc: true },
+  { id: 'chademo', name: 'CHAdeMO', short: 'CHAdeMO', dc: true },
+  { id: 'type2', name: 'Tipo 2 (Mennekes)', short: 'Tipo 2', dc: false },
+  { id: 'tesla', name: 'Tesla', short: 'Tesla', dc: true },
+  { id: 'chaoji', name: 'ChaoJi', short: 'ChaoJi', dc: true },
+  { id: 'ccs1', name: 'CCS (Combo 1)', short: 'CCS1', dc: true },
+  { id: 'type1', name: 'Tipo 1 (Yazaki)', short: 'Tipo 1', dc: false },
+  { id: 'type3', name: 'Tipo 3', short: 'Tipo 3', dc: false },
+  { id: 'schuko', name: 'Schuko (doméstico)', short: 'Schuko', dc: false },
+  { id: 'cee', name: 'CEE industrial', short: 'CEE', dc: false },
+  { id: 'other', name: 'Otro', short: 'Otro', dc: false },
+] as const;
+
+export type EvConnectorId = (typeof EV_CONNECTORS)[number]['id'];
+
+/** Bit de cada conector en la máscara compacta de la capa. */
+export const EV_CONNECTOR_BIT: Record<EvConnectorId, number> = Object.fromEntries(EV_CONNECTORS.map((c, i) => [c.id, 1 << i])) as Record<EvConnectorId, number>;
+
+/** 0 lenta (<22 kW), 1 semirrápida (22-49), 2 rápida (50-149), 3 ultrarrápida (≥150) */
+export type EvTier = 0 | 1 | 2 | 3;
+
+export interface EvSite {
+  id: string;
+  name: string;
+  operator: string;
+  operatorId: string | null;
+  lat: number;
+  lng: number;
+  address: string | null;
+  municipality: string | null;
+  province: string | null;
+  postcode: string | null;
+  siteType: string | null;
+  open24h: boolean;
+  hours: string | null;
+  /** métodos de acceso/pago según DATEX2: apps, rfid, creditCard, debitCard, nfc, pinpad */
+  auth: string[];
+  /** número de cargadores (refill points) */
+  points: number;
+  maxKw: number;
+  connectors: { type: EvConnectorId; kw: number; n: number }[];
+}
+
+export const EV_SHARDS = 32;
+/** Shard estable a partir del id textual del emplazamiento. */
+export function evShardOf(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % EV_SHARDS;
+}
+
+/** [id, lat, lng, maxKw, tier, points, connectorMask, operatorIdx, open24h(0|1)] */
+export type EvLayerSite = [string, number, number, number, EvTier, number, number, number, 0 | 1];
+
+export interface EvLayerJson {
+  generatedAt: string;
+  /** fecha de publicación del dataset de la DGT */
+  publishedAt: string;
+  operators: string[];
+  sites: EvLayerSite[];
+}
+
+export type EvShard = Record<string, EvSite>;
+
+export interface EvMeta {
+  sites: number;
+  points: number;
+  connectors: number;
+  publishedAt: string;
+}
+
 export const DATA_FILES = {
+  evLayer: 'ev/layer.json',
+  evShard: (shard: number) => `ev/${shard}.json`,
   meta: 'meta.json',
   layer: (fuel: FuelId) => `layers/${fuel}.json`,
   stations: (shard: number) => `stations/${shard}.json`,

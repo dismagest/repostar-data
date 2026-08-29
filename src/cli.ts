@@ -10,6 +10,7 @@
 import { join } from 'node:path';
 import { applySnapshot } from './apply.ts';
 import { fetchBrent } from './brent.ts';
+import { fetchEvSites } from './ev.ts';
 import { DATA_FILES } from './contract.ts';
 import { fetchCurrent, fetchHistoric, madridOffsetMinutes } from './ministry.ts';
 import { fetchNews } from './news.ts';
@@ -18,6 +19,8 @@ import { isEmptyState, loadState, saveState, StateLoadError } from './state.ts';
 
 const NEWS_MAX_AGE_H = 3;
 const BRENT_MAX_AGE_H = 12;
+/** El DATEX2 de la DGT se publica a diario; 20 h evita perder un día por desfase horario. */
+const EV_MAX_AGE_H = 20;
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -87,6 +90,19 @@ async function main() {
         log(`noticias: ${state.news.items.length} titulares`);
       } catch (e) {
         log(`noticias: fallo ignorado: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    if (ageH(state.ev?.fetchedAt) >= EV_MAX_AGE_H) {
+      try {
+        const { sites, publishedAt } = await fetchEvSites();
+        if (sites.length >= 5000) {
+          state.ev = { fetchedAt: new Date().toISOString(), publishedAt, sites };
+          log(`electrolineras: ${sites.length} emplazamientos (publicado ${publishedAt})`);
+        } else {
+          log(`electrolineras: solo ${sites.length} emplazamientos, se conserva el anterior`);
+        }
+      } catch (e) {
+        log(`electrolineras: fallo ignorado: ${e instanceof Error ? e.message : e}`);
       }
     }
     if (ageH(state.brent?.updatedAt) >= BRENT_MAX_AGE_H) {
